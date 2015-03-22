@@ -1,0 +1,4 @@
+LIBRARY cacher_dynamic.dll
+EXPORTS
+   LoadFunc @1
+   SaveFunc @2
