@@ -37,7 +37,7 @@
 					filepath = pathConfig.appendPath filepath filename
 					makedir filepath 
 				)
-				CacherCommands.CacheMesh obj (pathConfig.appendPath filepath filename) 0 100
+				CacherCommands.CacheMesh obj (pathConfig.appendPath filepath filename) startFrame.value endFrame.value
 			)
 			else (
 				messageBox "Select one object"

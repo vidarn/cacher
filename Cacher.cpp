@@ -150,31 +150,12 @@ public:
 int CacherCreateCallBack::proc(ViewExp *vpt,int msg, int point, int /*flags*/, IPoint2 m, Matrix3& mat )
 {
     TimeValue t (0);
-    if (msg==MOUSE_POINT||msg==MOUSE_MOVE) {
-        switch(point) 
-        {
-        case 0: // only happens with MOUSE_POINT msg
-            ob->suspendSnap = TRUE;
-            sp0 = m;
-            p0 = vpt->SnapPoint(m,m,NULL,SNAP_IN_PLANE);
-            mat.SetTrans(p0); // sets the pivot location
-            return CREATE_STOP;
-            break;
-        case 1:
-										{
-            ob->suspendSnap = TRUE; 
-            p1 = vpt->SnapPoint(m,m,NULL,SNAP_IN_PLANE);
-            float speedFactor = 24.0f;
-            ob->mesh.InvalidateGeomCache();
-            ob->BuildMesh(t);
-            if (msg == 1)
-                return CREATE_STOP;
-            break;
-										}
-        case 2:
-            return CREATE_STOP;
-        }
-        ob->NotifyDependents(FOREVER, PART_ALL, REFMSG_CHANGE);
+    if (msg==MOUSE_POINT) {
+        ob->suspendSnap = TRUE;
+        sp0 = m;
+        p0 = vpt->SnapPoint(m,m,NULL,SNAP_IN_PLANE);
+        mat.SetTrans(p0); // sets the pivot location
+        return CREATE_STOP;
     } 
     else {
         if (msg == MOUSE_ABORT) return CREATE_ABORT;

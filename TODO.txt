@@ -1,0 +1,7 @@
+* compression
+* include transformation
+* uvw data
+* explicit normals
+* fix bug when caching cacher
+* prettier placeholder object
+* memorymapped file management

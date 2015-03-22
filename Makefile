@@ -1,4 +1,4 @@
-release 		 =2015
+release 		 =2014
 optimization     = -Od
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 
 include_path = -I"C:\Program Files\Autodesk\3ds Max $(release) SDK\maxsdk\include" -I"..\src"
@@ -8,6 +8,7 @@ compiler_flags = -MP -GS -W4 -Zc:wchar_t  -Zi -Gm- -fp:fast -errorReport:prompt 
 linker_flags = -MANIFEST -NXCOMPAT -DYNAMICBASE:NO -DEBUG -DLL -MACHINE:X64 -SUBSYSTEM:WINDOWS -ERRORREPORT:PROMPT -NOLOGO -TLBID:1 
 plugin_dir ="C:\Program Files\Autodesk\3ds Max $(release)\plugins\\"
 libs = bmm.lib core.lib geom.lib gfx.lib mesh.lib maxutil.lib maxscrpt.lib manipsys.lib paramblk2.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib
+options = -D DYNAMIC
 
 
 source_dir=..\src\ 
@@ -31,7 +32,7 @@ dynamic_defines = -D "MODULE_NAME=$(dynamic_dll).dll" $(defines)
 
 cacher:
 	@rc ../src/Cacher.rc
-	@cl $(compiler_flags) $(optimization) $(warnings) $(include_path) $(cacher_defines) $(cacher_cpp) /link $(linker_flags) $(lib_path) $(libs) ../src/Cacher.res -DEF:$(cacher_def) -out:$(cacher_out)
+	@cl $(compiler_flags) $(optimization) $(warnings) $(options) $(include_path) $(cacher_defines) $(cacher_cpp) /link $(linker_flags) $(lib_path) $(libs) ../src/Cacher.res -DEF:$(cacher_def) -out:$(cacher_out)
 
 dynamic:
-	@cl $(compiler_flags) $(optimization) $(warnings) $(include_path) $(dynamic_defines) $(dynamic_cpp) /link $(linker_flags) $(lib_path) $(libs) -DEF:$(dynamic_def) -out:$(dynamic_out)
+	@cl $(compiler_flags) $(optimization) $(warnings) $(options) $(include_path) $(dynamic_defines) $(dynamic_cpp) /link $(linker_flags) $(lib_path) $(libs) -DEF:$(dynamic_def) -out:$(dynamic_out)
