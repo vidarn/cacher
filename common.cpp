@@ -3,15 +3,25 @@
 // Windows Header Files:
 #include <windows.h>
 
+#ifdef MAX_REL_2015
+const wchar_t* PLUGINS_FOLDER = L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins";
+const wchar_t* DYNAMIC_DLL_PATH = L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins\\cacher_dynamic.dll";
+#endif
+
+#ifdef MAX_REL_2014
+const wchar_t* PLUGINS_FOLDER = L"C:\\Program Files\\Autodesk\\3ds Max 2014\\plugins";
+const wchar_t* DYNAMIC_DLL_PATH = L"C:\\Program Files\\Autodesk\\3ds Max 2014\\plugins\\cacher_dynamic.dll";
+#endif
+
 void * loadDynamicFunc(const char *func_name)
 {
     DWORD len = GetDllDirectory(0,NULL);
     WCHAR *oldDir = new WCHAR[len];
     GetDllDirectory(len,oldDir);
-    SetDllDirectory(L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins");
+    SetDllDirectory(PLUGINS_FOLDER);
 
     HINSTANCE oldHandle;
-    oldHandle = GetModuleHandle(L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins\\cacher_dynamic.dll");
+    oldHandle = GetModuleHandle(DYNAMIC_DLL_PATH);
     if(oldHandle){
         FreeLibrary(oldHandle);
     }
@@ -33,10 +43,10 @@ void freeDynamic()
     DWORD len = GetDllDirectory(0,NULL);
     WCHAR *oldDir = new WCHAR[len];
     GetDllDirectory(len,oldDir);
-    SetDllDirectory(L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins");
+    SetDllDirectory(PLUGINS_FOLDER);
 
     HINSTANCE oldHandle;
-    oldHandle = GetModuleHandle(L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins\\cacher_dynamic.dll");
+    oldHandle = GetModuleHandle(DYNAMIC_DLL_PATH);
     if(oldHandle){
         FreeLibrary(oldHandle);
     }

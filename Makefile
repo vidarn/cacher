@@ -1,3 +1,4 @@
+#TODO(Vidar) Add option for release build. For now: -Ox, -MD, #-D DYNAMIC
 release 		 =2014
 optimization     = -Od
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 
@@ -8,10 +9,11 @@ compiler_flags = -MP -GS -W4 -Zc:wchar_t  -Zi -Gm- -fp:fast -errorReport:prompt 
 linker_flags = -MANIFEST -NXCOMPAT -DYNAMICBASE:NO -DEBUG -DLL -MACHINE:X64 -SUBSYSTEM:WINDOWS -ERRORREPORT:PROMPT -NOLOGO -TLBID:1 
 plugin_dir ="C:\Program Files\Autodesk\3ds Max $(release)\plugins\\"
 libs = bmm.lib core.lib geom.lib gfx.lib mesh.lib maxutil.lib maxscrpt.lib manipsys.lib paramblk2.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib
-options = -D DYNAMIC
+options = -D MAX_REL_$(release) -D DYNAMIC 
 
 
 source_dir=..\src\ 
+lib_dir=..\src\lib\ 
 output_dir=..\build\ 
 
 update:dynamic
@@ -19,13 +21,13 @@ update:dynamic
 all:cacher dynamic
 
 cacher_dll = Cacher
-cacher_cpp = $(source_dir)Cacher.cpp $(source_dir)common.cpp $(source_dir)DllEntry.cpp $(source_dir)Dynamic.cpp
+cacher_cpp = $(source_dir)Cacher.cpp $(source_dir)common.cpp $(source_dir)DllEntry.cpp $(source_dir)Dynamic.cpp $(lib_dir)lz4.c
 cacher_def = $(source_dir)Cacher.def 
 cacher_out = $(plugin_dir)$(cacher_dll).dlo
 cacher_defines = -D "MODULE_NAME=$(cacher_dll).dll" $(defines)
 
 dynamic_dll = cacher_dynamic
-dynamic_cpp = $(source_dir)Dynamic.cpp $(source_dir)dllmain.cpp
+dynamic_cpp = $(source_dir)Dynamic.cpp $(source_dir)dllmain.cpp $(lib_dir)lz4.c
 dynamic_def = $(source_dir)Dynamic.def 
 dynamic_out = $(plugin_dir)$(dynamic_dll).dll
 dynamic_defines = -D "MODULE_NAME=$(dynamic_dll).dll" $(defines)
