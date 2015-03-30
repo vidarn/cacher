@@ -1,6 +1,6 @@
 #TODO(Vidar) Add option for release build. For now: -Ox, -MD, #-D DYNAMIC
 release 		 =2014
-optimization     = -Od
+optimization     = -Ox
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 
 include_path = -I"C:\Program Files\Autodesk\3ds Max $(release) SDK\maxsdk\include" -I"..\src"
 lib_path     = -LIBPATH:"C:\Program Files\Autodesk\3ds Max $(release) SDK\maxsdk\lib\x64\Release"
