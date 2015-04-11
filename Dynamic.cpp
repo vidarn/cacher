@@ -11,6 +11,7 @@
 #include <triobj.h>
 #include <process.h>
 #include "params.h"
+#include "cached_frame.h"
 
 #include "lib/lz4.h"
 
@@ -198,226 +199,148 @@ static unsigned __stdcall thread_proc(void *data)
     return 0;
 }
 
-/*char *Cache(IParamBlock2 *pblock, int start, int end)
+void FreeCache(int start, int end, CachedFrame *cached_frames)
 {
-    void *h_view = 0;
-    int frame = t/GetTicksPerFrame();
-
-    int version = 0;
-    int num_verts = 0;
-    int num_faces = 0;
-    int num_tverts = 0;
-    int compressed_size[NUM_BUCKETS] = {};
-    int bucket_size[NUM_BUCKETS] = {};
-    int bucket_size_total = 0;
-    int compressed_size_total = 0;
-    HANDLE h_file_mapping = 0;
-    HANDLE h_file = 0;
-    bool file_read = false;
-    MSTR str = pblock->GetStr(pb_filename,t);
-    wchar_t *in_filename = str.ToBSTR();
-    if(in_filename){
-        size_t len = wcslen(in_filename);
-        if(len > 10){
-            in_filename[len-9] = 0;
-
-            MSTR status = MSTR::FromBSTR(in_filename);
-            pblock->SetValue(pb_status,t,status);
-
-            size_t buffer_size = (len + wcslen(filename_template)+10);
-            wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
-            swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
-
-            SECURITY_ATTRIBUTES security_attr;
-            security_attr.nLength = sizeof(SECURITY_ATTRIBUTES);
-            security_attr.lpSecurityDescriptor = NULL;
-            security_attr.bInheritHandle = TRUE;
-
-            h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, &security_attr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-            //h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-            if(h_file != INVALID_HANDLE_VALUE){
-
-                //TODO(Vidar) Read basic info
-
-                const int buffer_size = sizeof(int)*(4 + 2*NUM_BUCKETS);
-                int char_buffer[buffer_size];
-
-                ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
-                int* buffer = (int*)char_buffer;
-
-                version         = *(buffer++);
-                num_verts       = *(buffer++);
-                num_faces       = *(buffer++);
-                num_tverts      = *(buffer++);
-                for(int i=0;i<NUM_BUCKETS;i++){
-                    compressed_size[i] = *(buffer++);
-                    bucket_size[i] = *(buffer++);
-                    bucket_size_total += bucket_size[i];
-                    compressed_size_total += compressed_size[i];
-                }
-
-
-                file_read = true;
-
-            }
-            free(filename_buffer);
-        }
-        SysFreeString(in_filename);
-    } else {
+    for(int frame = start; frame <= end; frame++){
+        free(cached_frames[frame].verts);
+        free(cached_frames[frame].faces);
     }
-}*/
+    if(cached_frames != NULL){
+        free(cached_frames);
+    }
+}
 
-void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, IParamBlock2 *pblock)
+void Cache(IParamBlock2 *pblock, int *start, int *end, CachedFrame **cached_frames)
 {
 
+    //TODO(Vidar) realloc or free the previous frames
+    *cached_frames = (CachedFrame*)malloc((*end+1)*sizeof(CachedFrame));
+    void *h_view = 0;
+    int new_start = *start;
+    for(int frame = *start; frame <= *end; frame++){
+        TimeValue t = frame*GetTicksPerFrame();
+        CachedFrame cf = {};
+        int version = 0;
+        int num_verts = 0;
+        int num_faces = 0;
+        int num_tverts = 0;
+        int compressed_size[NUM_BUCKETS] = {};
+        int bucket_size[NUM_BUCKETS] = {};
+        int bucket_size_total = 0;
+        int compressed_size_total = 0;
+        HANDLE h_file_mapping = 0;
+        HANDLE h_file = 0;
+        bool file_read = false;
+
+        MSTR str = pblock->GetStr(pb_filename,t);
+        wchar_t *in_filename = str.ToBSTR();
+        if(in_filename){
+            size_t len = wcslen(in_filename);
+            if(len > 10){
+                in_filename[len-9] = 0;
+
+                MSTR status = MSTR::FromBSTR(in_filename);
+                pblock->SetValue(pb_status,t,status);
+
+                size_t buffer_size = (len + wcslen(filename_template)+10);
+                wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
+                swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
+
+                SECURITY_ATTRIBUTES security_attr;
+                security_attr.nLength = sizeof(SECURITY_ATTRIBUTES);
+                security_attr.lpSecurityDescriptor = NULL;
+                security_attr.bInheritHandle = TRUE;
+
+                h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, &security_attr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+                if(h_file != INVALID_HANDLE_VALUE){
+
+                    const int buffer_size = sizeof(int)*(4 + 2*NUM_BUCKETS);
+                    int char_buffer[buffer_size];
+
+                    ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
+                    int* buffer = (int*)char_buffer;
+
+                    version         = *(buffer++);
+                    num_verts       = *(buffer++);
+                    num_faces       = *(buffer++);
+                    num_tverts      = *(buffer++);
+                    for(int i=0;i<NUM_BUCKETS;i++){
+                        compressed_size[i] = *(buffer++);
+                        bucket_size[i] = *(buffer++);
+                        bucket_size_total += bucket_size[i];
+                        compressed_size_total += compressed_size[i];
+                    }
+
+                    char *data = (char *)malloc(bucket_size_total);
+
+                    ThreadData thread_data[NUM_BUCKETS];
+                    HANDLE h_threads[NUM_BUCKETS];
+                    int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
+                    int offset_data =0 ;
+                    for(int i=0;i<NUM_BUCKETS;i++){
+                        thread_data[i].h_file = h_file;
+                        thread_data[i].data = data + offset_data;;
+                        thread_data[i].bucket_size = bucket_size[i];
+                        thread_data[i].compressed_size_total = compressed_size_total;
+                        thread_data[i].offset_source = offset_source;
+
+                        h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
+                        offset_source += compressed_size[i];
+                        offset_data   += bucket_size[i];
+                    }
+
+                    for(int i=0;i<NUM_BUCKETS;i++){
+                        WaitForSingleObject(h_threads[i], INFINITE );
+                    }
+
+
+                    CloseHandle(h_file);
+
+                    //TODO(Vidar) free these
+                    cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
+                    cf.faces = (Face*  )malloc(sizeof(Face  )*num_faces);
+                    cf.num_verts = num_verts;
+                    cf.num_faces = num_faces;
+
+                    char *curr_data = data;
+                    memcpy((void*)cf.verts,(void*)curr_data,num_verts*sizeof(Point3));
+
+                    curr_data += num_verts*3*sizeof(float);
+                    memcpy((void*)cf.faces,(void*)curr_data,num_faces*sizeof(Face));
+
+                    free(data);
+                    
+                    file_read = true;
+
+                }
+                free(filename_buffer);
+            }
+            SysFreeString(in_filename);
+        }
+        if(!file_read){
+            new_start = frame+1;
+        }
+        (*cached_frames)[frame] = cf;
+    }
+    *start = new_start;
+}
+
+void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, CachedFrame* cached_frames, int start, int end)
+{
     init_time();
-
-    void *h_view = 0;
     int frame = t/GetTicksPerFrame();
-
-    int version = 0;
-    int num_verts = 0;
-    int num_faces = 0;
-    int num_tverts = 0;
-    int compressed_size[NUM_BUCKETS] = {};
-    int bucket_size[NUM_BUCKETS] = {};
-    int bucket_size_total = 0;
-    int compressed_size_total = 0;
-    HANDLE h_file_mapping = 0;
-    HANDLE h_file = 0;
-    bool file_read = false;
-
-    print_time(L"Init");
-    MSTR str = pblock->GetStr(pb_filename,t);
-    wchar_t *in_filename = str.ToBSTR();
-    if(in_filename){
-        size_t len = wcslen(in_filename);
-        if(len > 10){
-            in_filename[len-9] = 0;
-
-            MSTR status = MSTR::FromBSTR(in_filename);
-            pblock->SetValue(pb_status,t,status);
-
-            size_t buffer_size = (len + wcslen(filename_template)+10);
-            wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
-            swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
-            print_time(L"Create filename");
-
-            SECURITY_ATTRIBUTES security_attr;
-            security_attr.nLength = sizeof(SECURITY_ATTRIBUTES);
-            security_attr.lpSecurityDescriptor = NULL;
-            security_attr.bInheritHandle = TRUE;
-
-            h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, &security_attr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-            //h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-            print_time(L"Open file handle");
-            if(h_file != INVALID_HANDLE_VALUE){
-
-                //TODO(Vidar) Read basic info
-
-                const int buffer_size = sizeof(int)*(4 + 2*NUM_BUCKETS);
-                int char_buffer[buffer_size];
-
-                ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
-                int* buffer = (int*)char_buffer;
-
-                version         = *(buffer++);
-                num_verts       = *(buffer++);
-                num_faces       = *(buffer++);
-                num_tverts      = *(buffer++);
-                for(int i=0;i<NUM_BUCKETS;i++){
-                    compressed_size[i] = *(buffer++);
-                    bucket_size[i] = *(buffer++);
-                    bucket_size_total += bucket_size[i];
-                    compressed_size_total += compressed_size[i];
-                }
-
-                print_time(L"Read basic info");
-
-                file_read = true;
-
-                print_time(L"Create file mapping");
-
-            }
-            free(filename_buffer);
-        }
-        SysFreeString(in_filename);
+    if(frame >= start && frame <= end){
+        CachedFrame cf = cached_frames[frame];
+        mesh->setNumVerts(cf.num_verts);
+        mesh->setNumFaces(cf.num_faces);
+        //TODO(Vidar) What if we just change the pointer? Kind of dangerous, but perhaps it could work
+        // however, what happens when 3ds max decides to release the memory..?
+        // On second thought, I don't think we need to worry about it, it seems fast enough allready
+        memcpy((void*)mesh->verts,(void*)cf.verts,cf.num_verts*sizeof(Point3));
+        memcpy((void*)mesh->faces,(void*)cf.faces,cf.num_faces*sizeof(Face  ));
     } else {
-    }
-    print_time(L"Load file");
-    if(file_read){
-        mesh->setNumVerts(num_verts);
-        mesh->setNumFaces(num_faces);
-        if(num_tverts > 0){
-            mesh->setMapSupport(1);
-            mesh->setNumTVerts(num_tverts);
-        }
-
-        char *data = (char *)malloc(bucket_size_total);
-        print_time(L"Set verts");
-
-
-
-        print_time(L"Decompress");
-
-        ThreadData thread_data[NUM_BUCKETS];
-        HANDLE h_threads[NUM_BUCKETS];
-        int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
-        int offset_data =0 ;
-        for(int i=0;i<NUM_BUCKETS;i++){
-            thread_data[i].h_file = h_file;
-            thread_data[i].data = data + offset_data;;
-            thread_data[i].bucket_size = bucket_size[i];
-            thread_data[i].compressed_size_total = compressed_size_total;
-            thread_data[i].offset_source = offset_source;
-
-            h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
-            offset_source += compressed_size[i];
-            offset_data   += bucket_size[i];
-        }
-
-        for(int i=0;i<NUM_BUCKETS;i++){
-            WaitForSingleObject(h_threads[i], INFINITE );
-        }
-
-
-        CloseHandle(h_file);
-        print_time(L"Close file");
-
-
-        char *curr_data = data;
-        memcpy((void*)mesh->verts,(void*)curr_data,num_verts*3*sizeof(float));
-
-        curr_data += num_verts*3*sizeof(float);
-        memcpy((void*)mesh->faces,(void*)curr_data,num_faces*5*sizeof(DWORD));
-
-        /*
-        if(num_tverts > 0){
-            float *tvert_data = (float*)(face_data);
-            for(int i=0;i<num_tverts;i++){
-                Point3 p;
-                p.x = tvert_data[i*3 + 0];
-                p.y = tvert_data[i*3 + 1];
-                p.z = tvert_data[i*3 + 2];
-                mesh->tVerts[i] = p;
-            }
-            DWORD *tvface_data = (DWORD*)(tvert_data + num_tverts*3);
-            for(int i=0;i<num_faces;i++){
-                TVFace f;
-                f.t[0] = tvface_data[i*3 + 0];
-                f.t[1] = tvface_data[i*3 + 1];
-                f.t[2] = tvface_data[i*3 + 2];
-                mesh->tvFace[i] = f;
-            }
-        }*/
-        free(data);
-
-        print_time(L"Create mesh");
-    } else {
+        //TODO(Vidar) Draw a prettier default icon
         float s = 10.0f;
         mesh->setNumVerts(4);
         mesh->setNumFaces(3);
@@ -436,7 +359,6 @@ void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, IParamBlock2 *pblock)
         mesh->faces[2].setEdgeVisFlags(1,1,0);
         mesh->faces[2].setSmGroup(4);
     }
-    //TODO(Vidar) I'm not sure this is correct. Maybe it should be t + GetTicksPerFrame()...
-	//ivalid->Set(t,t+1);
-	ivalid->Set(t,t+GetTicksPerFrame()-1);
+    ivalid->Set(t,t+GetTicksPerFrame()-1);
+    print_time(L"Update mesh");
 }

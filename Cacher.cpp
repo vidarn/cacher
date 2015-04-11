@@ -1,6 +1,7 @@
 #include "common.h"
 #include "params.h"
 #include "Cacher.h"
+#include "cached_frame.h"
 #include "Dynamic.h"
 
 #define Cacher_CLASS_ID	Class_ID(0x854be7e6, 0x6a6b9f59)
@@ -45,6 +46,10 @@ public:
 	virtual IParamBlock2* GetParamBlockByID(BlockID id) { return (pblock2->ID() == id) ? pblock2 : NULL; } // return id'd ParamBlock
 
 	void DeleteThis() { delete this; }
+
+    // members
+    int m_cached_start, m_cached_end;
+    CachedFrame* m_cached_frames;
 };
 
 
@@ -100,7 +105,7 @@ static ParamBlockDesc2 cacher_param_blk ( cacher_params, _T("params"),  0, GetCa
 
 //--- Cacher -------------------------------------------------------
 
-Cacher::Cacher()
+Cacher::Cacher(): m_cached_start(0), m_cached_end(0), m_cached_frames(NULL)
 {
 	GetCacherDesc()->MakeAutoParamBlocks(this);
 }
@@ -113,6 +118,24 @@ void Cacher::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
 {
 	SimpleObject2::BeginEditParams(ip,flags,prev);
 	GetCacherDesc()->BeginEditParams(ip, this, flags, prev);
+    //TODO(Vidar) Caching here temporarily. Change this!
+
+    FREECACHEFUNC free_cache_func = (FREECACHEFUNC)FUNC(FreeCache);
+    if(free_cache_func != NULL){
+        free_cache_func(m_cached_start, m_cached_end, m_cached_frames);
+    } else {
+        DWORD lastError = GetLastError();
+        DebugPrint(L"Error loading function \"FreeCacheFunc\"\nError code: %d\n",lastError);
+    }
+    CACHEFUNC cache_func = (CACHEFUNC)FUNC(Cache);
+    if(cache_func != NULL){
+        m_cached_start = 0;
+        m_cached_end = 100;
+        cache_func(pblock2, &m_cached_start, &m_cached_end, &m_cached_frames);
+    } else {
+        DWORD lastError = GetLastError();
+        DebugPrint(L"Error loading function \"CacheFunc\"\nError code: %d\n",lastError);
+    }
 }
 
 void Cacher::EndEditParams( IObjParam* ip, ULONG flags, Animatable* next )
@@ -178,7 +201,7 @@ void Cacher::BuildMesh(TimeValue t)
 {
     LOADFUNC load_func = (LOADFUNC)FUNC(LoadFunc);
     if(load_func != NULL){
-        load_func(&mesh, t, &ivalid, pblock2);
+        load_func(&mesh, t, &ivalid, m_cached_frames, m_cached_start, m_cached_end);
     } else {
         DWORD lastError = GetLastError();
         DebugPrint(L"Error loading function \"LoadFunc\"\nError code: %d\n",lastError);
