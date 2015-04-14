@@ -1,10 +1,12 @@
-typedef bool (*SAVEFUNC)(INode*, MSTR, int, int);
-typedef void (*FREECACHEFUNC)(int, int, struct CachedFrame*);
-typedef void (*CACHEFUNC)(IParamBlock2*, int*, int*, struct CachedFrame**);
-typedef void (*LOADFUNC)(Mesh*, TimeValue, Interval*, struct CachedFrame*, int, int);
+typedef bool    (*SAVEFUNC)(INode*, MSTR, int, int);
+typedef INT_PTR (*DLGPROCFUNC)(TimeValue, IParamMap2 *, HWND, UINT, WPARAM, LPARAM, struct CachedData*);
+typedef void    (*FREECACHEFUNC)(CachedData*);
+typedef void    (*CACHEFUNC)(IParamBlock2*, CachedData *);
+typedef void    (*LOADFUNC)(Mesh*, TimeValue, Interval*, struct CachedData);
 
-bool SaveFunc(INode *node, MSTR filename, int start, int end);
-void FreeCache(int start, int end, CachedFrame *cached_frames);
-void Cache(IParamBlock2 *pblock, int *start, int *end, struct CachedFrame **cached_frames);
-void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, struct CachedFrame* cached_frames, int start, int end);
+bool    SaveFunc(INode *node, MSTR filename, int start, int end);
+INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, struct CachedData* cached_data);
+void    FreeCache(CachedData* cached_data);
+void    Cache(IParamBlock2 *pblock, CachedData *cached_data);
+void    LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, struct CachedData cached_data);
 

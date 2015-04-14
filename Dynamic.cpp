@@ -10,8 +10,11 @@
 #include <iparamm2.h>
 #include <triobj.h>
 #include <process.h>
+#include <WindowsMessageFilter.h>
 #include "params.h"
 #include "cached_frame.h"
+#include "resource.h"
+#include "Dynamic.h"
 
 #include "lib/lz4.h"
 
@@ -161,13 +164,17 @@ bool SaveFunc(INode *node, MSTR filename, int start, int end)
 static long long time;
 static void print_time(wchar_t *str)
 {
+#if DYNAMIC
     DebugPrint(L"%s time: %d\n", str, milliseconds_now() - time);
     time = milliseconds_now();
+#endif
 }
 static void init_time()
 {
+#if DYNAMIC
     DebugPrint(L"----------\n");
     time = milliseconds_now();
+#endif
 }
 
 
@@ -199,147 +206,198 @@ static unsigned __stdcall thread_proc(void *data)
     return 0;
 }
 
-void FreeCache(int start, int end, CachedFrame *cached_frames)
+INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, CachedData* cached_data)
 {
-    for(int frame = start; frame <= end; frame++){
-        free(cached_frames[frame].verts);
-        free(cached_frames[frame].faces);
+    INT_PTR ret = FALSE;
+    if(msg == WM_COMMAND){
+        int control = LOWORD(wParam);
+        int command = HIWORD(wParam);
+        switch(control){
+            case IDC_CACHERAM:
+                if(command == BN_BUTTONUP){
+                    HWND btn_hwnd = GetDlgItem(hWnd,IDC_CACHERAM);
+                    ICustButton *button = GetICustButton(btn_hwnd);
+                    FreeCache(cached_data);
+                    if(button->IsChecked()){
+                        IParamBlock2 *pblock = map->GetParamBlock();
+                        Cache(pblock, cached_data);
+                    }
+                    ReleaseICustButton(button);
+                }
+                ret = TRUE;
+                break;
+            case IDC_FILENAME:
+                if(command == 0){
+                    //NOTE(Vidar) Update status text and free cache
+                    IParamBlock2 *pblock = map->GetParamBlock();
+                    MSTR str = pblock->GetStr(pb_filename,t);
+                    pblock->SetValue(pb_status,t,str);
+                    pblock->SetValue(pb_ram,t,FALSE);
+                    FreeCache(cached_data);
+
+                    /*HWND btn_hwnd = GetDlgItem(hWnd,IDC_CACHERAM);
+                    ICustButton *button = GetICustButton(btn_hwnd);
+                    button->SetCheck(FALSE);
+                    ReleaseICustButton(button);*/
+                }
+                ret = TRUE;
+                break;
+        }
     }
-    if(cached_frames != NULL){
-        free(cached_frames);
+    return ret;
+}
+
+char * LoadFrameData(IParamBlock2 *pblock, int frame, int *num_verts, int *num_faces)
+{
+    TimeValue t = frame*GetTicksPerFrame();
+    int version;
+    int num_tverts;
+    int compressed_size[NUM_BUCKETS];
+    int bucket_size[NUM_BUCKETS];
+    int bucket_size_total = 0;
+    int compressed_size_total = 0;
+    char *data = NULL;
+    HANDLE h_file;
+    MSTR str = pblock->GetStr(pb_filename,t);
+    wchar_t *in_filename = str.ToBSTR();
+    if(in_filename){
+        size_t len = wcslen(in_filename);
+        if(len > 10){
+            in_filename[len-9] = 0;
+
+            MSTR status = MSTR::FromBSTR(in_filename);
+            pblock->SetValue(pb_status,t,status);
+
+            size_t buffer_size = (len + wcslen(filename_template)+10);
+            wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
+            swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
+
+            SECURITY_ATTRIBUTES security_attr;
+            security_attr.nLength = sizeof(SECURITY_ATTRIBUTES);
+            security_attr.lpSecurityDescriptor = NULL;
+            security_attr.bInheritHandle = TRUE;
+
+            h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, &security_attr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+            if(h_file != INVALID_HANDLE_VALUE){
+
+                const int buffer_size = sizeof(int)*(4 + 2*NUM_BUCKETS);
+                int char_buffer[buffer_size];
+
+                ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
+                int* buffer = (int*)char_buffer;
+
+                version         = *(buffer++);
+                *num_verts       = *(buffer++);
+                *num_faces       = *(buffer++);
+                num_tverts      = *(buffer++);
+                for(int i=0;i<NUM_BUCKETS;i++){
+                    compressed_size[i] = *(buffer++);
+                    bucket_size[i] = *(buffer++);
+                    bucket_size_total += bucket_size[i];
+                    compressed_size_total += compressed_size[i];
+                }
+
+                data = (char *)malloc(bucket_size_total);
+
+                ThreadData thread_data[NUM_BUCKETS];
+                HANDLE h_threads[NUM_BUCKETS];
+                int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
+                int offset_data =0 ;
+                for(int i=0;i<NUM_BUCKETS;i++){
+                    thread_data[i].h_file = h_file;
+                    thread_data[i].data = data + offset_data;;
+                    thread_data[i].bucket_size = bucket_size[i];
+                    thread_data[i].compressed_size_total = compressed_size_total;
+                    thread_data[i].offset_source = offset_source;
+
+                    h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
+                    offset_source += compressed_size[i];
+                    offset_data   += bucket_size[i];
+                }
+
+                for(int i=0;i<NUM_BUCKETS;i++){
+                    WaitForSingleObject(h_threads[i], INFINITE );
+                }
+
+
+                CloseHandle(h_file);
+            }
+            free(filename_buffer);
+        }
+        SysFreeString(in_filename);
+    }
+    return data;
+}
+
+//TODO(Vidar) Handle changes in frame range
+
+void FreeCache(CachedData* cached_data)
+{
+    for(int frame = cached_data->start; frame <= cached_data->end; frame++){
+        CachedFrame *cf = cached_data->frames + frame;
+        free(cf->verts); cf->verts = NULL;
+        free(cf->faces); cf->faces = NULL;
+        cf->valid = false;
     }
 }
 
-void Cache(IParamBlock2 *pblock, int *start, int *end, CachedFrame **cached_frames)
+void Cache(IParamBlock2 *pblock, CachedData *cached_data)
 {
-
-    //TODO(Vidar) realloc or free the previous frames
-    *cached_frames = (CachedFrame*)malloc((*end+1)*sizeof(CachedFrame));
     void *h_view = 0;
-    int new_start = *start;
-    for(int frame = *start; frame <= *end; frame++){
-        TimeValue t = frame*GetTicksPerFrame();
+    for(int frame = cached_data->start; frame <= cached_data->end; frame++){
         CachedFrame cf = {};
-        int version = 0;
         int num_verts = 0;
         int num_faces = 0;
-        int num_tverts = 0;
-        int compressed_size[NUM_BUCKETS] = {};
-        int bucket_size[NUM_BUCKETS] = {};
-        int bucket_size_total = 0;
-        int compressed_size_total = 0;
-        HANDLE h_file_mapping = 0;
-        HANDLE h_file = 0;
-        bool file_read = false;
 
-        MSTR str = pblock->GetStr(pb_filename,t);
-        wchar_t *in_filename = str.ToBSTR();
-        if(in_filename){
-            size_t len = wcslen(in_filename);
-            if(len > 10){
-                in_filename[len-9] = 0;
+        char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
+        if(data){
 
-                MSTR status = MSTR::FromBSTR(in_filename);
-                pblock->SetValue(pb_status,t,status);
+            cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
+            cf.faces = (Face*  )malloc(sizeof(Face  )*num_faces);
+            cf.num_verts = num_verts;
+            cf.num_faces = num_faces;
 
-                size_t buffer_size = (len + wcslen(filename_template)+10);
-                wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
-                swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
+            char *curr_data = data;
+            memcpy((void*)cf.verts,(void*)curr_data,num_verts*sizeof(Point3));
 
-                SECURITY_ATTRIBUTES security_attr;
-                security_attr.nLength = sizeof(SECURITY_ATTRIBUTES);
-                security_attr.lpSecurityDescriptor = NULL;
-                security_attr.bInheritHandle = TRUE;
+            curr_data += num_verts*3*sizeof(float);
+            memcpy((void*)cf.faces,(void*)curr_data,num_faces*sizeof(Face));
 
-                h_file = CreateFile(filename_buffer ,GENERIC_READ, 0, &security_attr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-
-                if(h_file != INVALID_HANDLE_VALUE){
-
-                    const int buffer_size = sizeof(int)*(4 + 2*NUM_BUCKETS);
-                    int char_buffer[buffer_size];
-
-                    ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
-                    int* buffer = (int*)char_buffer;
-
-                    version         = *(buffer++);
-                    num_verts       = *(buffer++);
-                    num_faces       = *(buffer++);
-                    num_tverts      = *(buffer++);
-                    for(int i=0;i<NUM_BUCKETS;i++){
-                        compressed_size[i] = *(buffer++);
-                        bucket_size[i] = *(buffer++);
-                        bucket_size_total += bucket_size[i];
-                        compressed_size_total += compressed_size[i];
-                    }
-
-                    char *data = (char *)malloc(bucket_size_total);
-
-                    ThreadData thread_data[NUM_BUCKETS];
-                    HANDLE h_threads[NUM_BUCKETS];
-                    int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
-                    int offset_data =0 ;
-                    for(int i=0;i<NUM_BUCKETS;i++){
-                        thread_data[i].h_file = h_file;
-                        thread_data[i].data = data + offset_data;;
-                        thread_data[i].bucket_size = bucket_size[i];
-                        thread_data[i].compressed_size_total = compressed_size_total;
-                        thread_data[i].offset_source = offset_source;
-
-                        h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
-                        offset_source += compressed_size[i];
-                        offset_data   += bucket_size[i];
-                    }
-
-                    for(int i=0;i<NUM_BUCKETS;i++){
-                        WaitForSingleObject(h_threads[i], INFINITE );
-                    }
-
-
-                    CloseHandle(h_file);
-
-                    //TODO(Vidar) free these
-                    cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
-                    cf.faces = (Face*  )malloc(sizeof(Face  )*num_faces);
-                    cf.num_verts = num_verts;
-                    cf.num_faces = num_faces;
-
-                    char *curr_data = data;
-                    memcpy((void*)cf.verts,(void*)curr_data,num_verts*sizeof(Point3));
-
-                    curr_data += num_verts*3*sizeof(float);
-                    memcpy((void*)cf.faces,(void*)curr_data,num_faces*sizeof(Face));
-
-                    free(data);
-                    
-                    file_read = true;
-
-                }
-                free(filename_buffer);
-            }
-            SysFreeString(in_filename);
+            free(data);
+            
+            cf.valid = true;
         }
-        if(!file_read){
-            new_start = frame+1;
-        }
-        (*cached_frames)[frame] = cf;
+
+        cached_data->frames[frame] = cf;
+        /* TODO(Vidar) We should handle messages to keep 3ds max from being unresponsive
+        MaxSDK::WindowsMessageFilter messageFilter;
+        messageFilter.RunNonBlockingMessageLoop();
+        if(messageFilter.Aborted()){
+            DebugPrint(L"Abort! Abort!\n");
+        }*/
     }
-    *start = new_start;
 }
 
-void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, CachedFrame* cached_frames, int start, int end)
+void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, CachedData cached_data)
 {
     init_time();
     int frame = t/GetTicksPerFrame();
-    if(frame >= start && frame <= end){
-        CachedFrame cf = cached_frames[frame];
-        mesh->setNumVerts(cf.num_verts);
-        mesh->setNumFaces(cf.num_faces);
-        //TODO(Vidar) What if we just change the pointer? Kind of dangerous, but perhaps it could work
-        // however, what happens when 3ds max decides to release the memory..?
-        // On second thought, I don't think we need to worry about it, it seems fast enough allready
-        memcpy((void*)mesh->verts,(void*)cf.verts,cf.num_verts*sizeof(Point3));
-        memcpy((void*)mesh->faces,(void*)cf.faces,cf.num_faces*sizeof(Face  ));
-    } else {
+    bool loaded_frame = false;
+    if(frame >= cached_data.start && frame <= cached_data.end){
+        CachedFrame cf = cached_data.frames[frame];
+        if(cf.valid){
+            mesh->setNumVerts(cf.num_verts);
+            mesh->setNumFaces(cf.num_faces);
+            //TODO(Vidar) What if we just change the pointer? Kind of dangerous, but perhaps it could work
+            // however, what happens when 3ds max decides to release the memory..?
+            // On second thought, I don't think we need to worry about it, it seems fast enough allready
+            memcpy((void*)mesh->verts,(void*)cf.verts,cf.num_verts*sizeof(Point3));
+            memcpy((void*)mesh->faces,(void*)cf.faces,cf.num_faces*sizeof(Face  ));
+            loaded_frame = true;
+        }
+    }
+    if(!loaded_frame){
         //TODO(Vidar) Draw a prettier default icon
         float s = 10.0f;
         mesh->setNumVerts(4);

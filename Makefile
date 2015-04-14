@@ -1,4 +1,5 @@
 #TODO(Vidar) Add option for release build. For now: -Ox, -MD, #-D DYNAMIC
+#                                    and for debug: -Od, -MDd, -D DYNAMIC
 release 		 =2014
 optimization     = -Od
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 

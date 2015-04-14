@@ -1,5 +1,7 @@
 LIBRARY cacher_dynamic.dll
 EXPORTS
-   LoadFunc @1
-   SaveFunc @2
-   Cache @3
+   LoadFunc  @1
+   SaveFunc  @2
+   DlgFunc   @3
+   FreeCache @4
+   Cache     @5
