@@ -19,6 +19,8 @@
 #define IDS_STATUS                              40006
 #define IDC_ENDSPIN                             40007
 #define IDS_OBJECT_NAME                         40007
+#define IDC_START_LABEL                         40008
 #define IDS_CACHERAM                            40008
+#define IDC_END_LABEL                           40009
 #define IDS_START                               40009
 #define IDS_END                                 40010
