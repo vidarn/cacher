@@ -234,11 +234,6 @@ INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wPar
                     pblock->SetValue(pb_status,t,str);
                     pblock->SetValue(pb_ram,t,FALSE);
                     FreeCache(cached_data);
-
-                    /*HWND btn_hwnd = GetDlgItem(hWnd,IDC_CACHERAM);
-                    ICustButton *button = GetICustButton(btn_hwnd);
-                    button->SetCheck(FALSE);
-                    ReleaseICustButton(button);*/
                 }
                 ret = TRUE;
                 break;
@@ -340,33 +335,44 @@ void FreeCache(CachedData* cached_data)
         free(cf->faces); cf->faces = NULL;
         cf->valid = false;
     }
+    free(cached_data->frames); cached_data->frames = NULL;
+    cached_data->start = 1;
+    cached_data->end   = 0;
 }
 
 void Cache(IParamBlock2 *pblock, CachedData *cached_data)
 {
     void *h_view = 0;
-    for(int frame = cached_data->start; frame <= cached_data->end; frame++){
+    Interval interval;
+    pblock->GetValue(pb_start, 0, cached_data->start, interval);
+    pblock->GetValue(pb_end,   0, cached_data->end,   interval);
+    if(cached_data->start < cached_data->end){
+        cached_data->frames = (CachedFrame *)malloc((cached_data->end+1)*sizeof(CachedFrame));
+    }
+    for(int frame = 0; frame <= cached_data->end; frame++){
         CachedFrame cf = {};
-        int num_verts = 0;
-        int num_faces = 0;
+        int num_verts  = 0;
+        int num_faces  = 0;
 
-        char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
-        if(data){
+        if(frame >= cached_data->start){
+            char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
+            if(data){
 
-            cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
-            cf.faces = (Face*  )malloc(sizeof(Face  )*num_faces);
-            cf.num_verts = num_verts;
-            cf.num_faces = num_faces;
+                cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
+                cf.faces = (Face*  )malloc(sizeof(Face  )*num_faces);
+                cf.num_verts = num_verts;
+                cf.num_faces = num_faces;
 
-            char *curr_data = data;
-            memcpy((void*)cf.verts,(void*)curr_data,num_verts*sizeof(Point3));
+                char *curr_data = data;
+                memcpy((void*)cf.verts,(void*)curr_data,num_verts*sizeof(Point3));
 
-            curr_data += num_verts*3*sizeof(float);
-            memcpy((void*)cf.faces,(void*)curr_data,num_faces*sizeof(Face));
+                curr_data += num_verts*3*sizeof(float);
+                memcpy((void*)cf.faces,(void*)curr_data,num_faces*sizeof(Face));
 
-            free(data);
-            
-            cf.valid = true;
+                free(data);
+                
+                cf.valid = true;
+            }
         }
 
         cached_data->frames[frame] = cf;
@@ -379,7 +385,7 @@ void Cache(IParamBlock2 *pblock, CachedData *cached_data)
     }
 }
 
-void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, CachedData cached_data)
+void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, CachedData cached_data)
 {
     init_time();
     int frame = t/GetTicksPerFrame();
@@ -398,24 +404,40 @@ void LoadFunc(Mesh *mesh, TimeValue t, Interval *ivalid, CachedData cached_data)
         }
     }
     if(!loaded_frame){
-        //TODO(Vidar) Draw a prettier default icon
-        float s = 10.0f;
-        mesh->setNumVerts(4);
-        mesh->setNumFaces(3);
-        mesh->setVert(0,s*Point3(0.0,0.0,0.0)); 
-        mesh->setVert(1,s*Point3(10.0,0.0,0.0)); 
-        mesh->setVert(2,s*Point3(0.0,10.0,0.0)); 
-        mesh->setVert(3,s*Point3(0.0,0.0,10.0)); 
+        int num_verts = 0;
+        int num_faces = 0;
 
-        mesh->faces[0].setVerts(0, 1, 2);
-        mesh->faces[0].setEdgeVisFlags(1,1,0);
-        mesh->faces[0].setSmGroup(2);
-        mesh->faces[1].setVerts(3, 1, 0);
-        mesh->faces[1].setEdgeVisFlags(1,1,0);
-        mesh->faces[1].setSmGroup(2);
-        mesh->faces[2].setVerts(0, 2, 3);
-        mesh->faces[2].setEdgeVisFlags(1,1,0);
-        mesh->faces[2].setSmGroup(4);
+        char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
+        if(data){
+            mesh->setNumVerts(num_verts);
+            mesh->setNumFaces(num_faces);
+
+            char *curr_data = data;
+            memcpy((void*)mesh->verts,(void*)curr_data,num_verts*sizeof(Point3));
+            curr_data += num_verts*sizeof(Point3);
+            memcpy((void*)mesh->faces,(void*)curr_data,num_faces*sizeof(Face  ));
+
+            free(data);
+        } else {
+            //TODO(Vidar) Draw a prettier default icon
+            float s = 10.0f;
+            mesh->setNumVerts(4);
+            mesh->setNumFaces(3);
+            mesh->setVert(0,s*Point3(0.0,0.0,0.0)); 
+            mesh->setVert(1,s*Point3(10.0,0.0,0.0)); 
+            mesh->setVert(2,s*Point3(0.0,10.0,0.0)); 
+            mesh->setVert(3,s*Point3(0.0,0.0,10.0)); 
+
+            mesh->faces[0].setVerts(0, 1, 2);
+            mesh->faces[0].setEdgeVisFlags(1,1,0);
+            mesh->faces[0].setSmGroup(2);
+            mesh->faces[1].setVerts(3, 1, 0);
+            mesh->faces[1].setEdgeVisFlags(1,1,0);
+            mesh->faces[1].setSmGroup(2);
+            mesh->faces[2].setVerts(0, 2, 3);
+            mesh->faces[2].setEdgeVisFlags(1,1,0);
+            mesh->faces[2].setSmGroup(4);
+        }
     }
     ivalid->Set(t,t+GetTicksPerFrame()-1);
     print_time(L"Update mesh");

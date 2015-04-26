@@ -139,13 +139,9 @@ static ParamBlockDesc2 cacher_param_blk ( cacher_params, _T("params"),  0, GetCa
 
 Cacher::Cacher()
 {
-    m_cached_data.start = 0;
-    m_cached_data.end = 100;
-    m_cached_data.frames = (CachedFrame*)malloc((101)*sizeof(CachedFrame));
-    for(int i=m_cached_data.start;i<=m_cached_data.end;i++){
-        CachedFrame cf = {};
-        m_cached_data.frames[i] = cf;
-    }
+    m_cached_data.start = 1;
+    m_cached_data.end   = 0;
+    m_cached_data.frames = NULL;
     GetCacherDesc()->MakeAutoParamBlocks(this);
 }
 
@@ -242,7 +238,7 @@ void Cacher::BuildMesh(TimeValue t)
 {
     LOADFUNC load_func = (LOADFUNC)FUNC(LoadFunc);
     if(load_func != NULL){
-        load_func(&mesh, t, &ivalid, m_cached_data);
+        load_func(&mesh, t, pblock2, &ivalid, m_cached_data);
     } else {
         DWORD lastError = GetLastError();
         DebugPrint(L"Error loading function \"LoadFunc\"\nError code: %d\n",lastError);
