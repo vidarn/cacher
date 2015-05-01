@@ -8,7 +8,7 @@
 
 bool TestScriptInterface(INode *node, MSTR filename, int start, int end){
     bool ret = false;
-    SAVEFUNC save_func = (SAVEFUNC)FUNC(SaveFunc);
+    SAVEFUNC save_func = (SAVEFUNC)FUNC(SaveFunc,NULL);
     if(save_func != NULL){
         ret = save_func(node, filename, start, end);
     } else {

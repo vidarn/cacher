@@ -24,4 +24,6 @@
 #define IDS_CACHERAM                            40008
 #define IDC_END_LABEL                           40009
 #define IDS_START                               40009
+#define IDC_UNLOAD                              40010
 #define IDS_END                                 40010
+#define IDS_UNLOAD                              40011

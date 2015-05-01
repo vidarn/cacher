@@ -164,14 +164,14 @@ static long long time;
 static void print_time(wchar_t *str)
 {
 #if DYNAMIC
-    DebugPrint(L"%s time: %d\n", str, milliseconds_now() - time);
+    //DebugPrint(L"%s time: %d\n", str, milliseconds_now() - time);
     time = milliseconds_now();
 #endif
 }
 static void init_time()
 {
 #if DYNAMIC
-    DebugPrint(L"----------\n");
+    //DebugPrint(L"----------\n");
     time = milliseconds_now();
 #endif
 }

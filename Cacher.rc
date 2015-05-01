@@ -19,10 +19,11 @@ IDR_LOGO1          LOGO           ".\\logo.mesh"
 // Dialog resources
 //
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-IDD_PANEL DIALOG 0, 0, 108, 142
+IDD_PANEL DIALOG 0, 0, 108, 176
 STYLE DS_SETFONT | WS_VISIBLE | WS_CHILDWINDOW
 FONT 8, "MS Sans Serif"
 {
+    CONTROL         "Unload dll", IDC_UNLOAD, "CustButton", 0x50020000, 18, 137, 77, 24, 0x00000000
     CONTROL         "", IDC_STARTEDIT, "CustEdit", 0x50020000, 17, 97, 25, 11, 0x00000000
     CONTROL         "No file loaded", IDC_STATUS, "CustEdit", 0x50020000, 11, 17, 86, 15, 0x00000000
     LTEXT           "Cache location:", 0, 14, 8, 50, 9, SS_LEFT, WS_EX_LEFT
@@ -55,4 +56,5 @@ STRINGTABLE
     IDS_CACHERAM                  "Cache to RAM"
     IDS_START                     "start"
     IDS_END                       "end"
+    IDS_UNLOAD                    "Unload dll"
 }

@@ -8,6 +8,9 @@
 
 #define PBLOCK_REF  0
 
+DLGPROCFUNC dlg_func = NULL;
+LOADFUNC   load_func = NULL;
+
 class Cacher : public SimpleObject2
 {
 public:
@@ -57,14 +60,23 @@ class CacherDlgProc : public ParamMap2UserDlgProc {
         INT_PTR DlgProc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         {
             INT_PTR ret = FALSE;
-            DLGPROCFUNC dlg_func = (DLGPROCFUNC)FUNC(DlgFunc);
-            if(dlg_func != NULL){
-                ret = dlg_func(t,map,hWnd,msg,wParam,lParam,&(m_cacher->m_cached_data));
+            if(msg == WM_COMMAND){
+                int control = LOWORD(wParam);
+                int command = HIWORD(wParam);
+                if(control == IDC_UNLOAD && command == 0){
+                    FREEFUNCS;
+                    dlg_func = NULL;
+                    load_func = NULL;
+                }
             } else {
-                DWORD lastError = GetLastError();
-                DebugPrint(L"Error loading function \"DlgFunc\"\nError code: %d\n",lastError);
+                dlg_func = (DLGPROCFUNC)FUNC(DlgFunc,dlg_func);
+                if(dlg_func != NULL){
+                    ret = dlg_func(t,map,hWnd,msg,wParam,lParam,&(m_cacher->m_cached_data));
+                } else {
+                    DWORD lastError = GetLastError();
+                    DebugPrint(L"Error loading function \"DlgFunc\"\nError code: %d\n",lastError);
+                }
             }
-            FREEFUNCS;
             return ret;
         }
         void    DeleteThis() {} //NOTE(Vidar) user_dlg_proc is static
@@ -155,24 +167,6 @@ void Cacher::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)
 
     SimpleObject2::BeginEditParams(ip,flags,prev);
     GetCacherDesc()->BeginEditParams(ip, this, flags, prev);
-/*
-    //TODO(Vidar) Caching here temporarily. Change this!
-    FREECACHEFUNC free_cache_func = (FREECACHEFUNC)FUNC(FreeCache);
-    if(free_cache_func != NULL){
-        free_cache_func(m_cached_start, m_cached_end, m_cached_frames);
-    } else {
-        DWORD lastError = GetLastError();
-        DebugPrint(L"Error loading function \"FreeCache\"\nError code: %d\n",lastError);
-    }
-    CACHEFUNC cache_func = (CACHEFUNC)FUNC(Cache);
-    if(cache_func != NULL){
-        cache_func(pblock2, m_cached_start, m_cached_end, m_cached_frames);
-    } else {
-        DWORD lastError = GetLastError();
-        DebugPrint(L"Error loading function \"CacheFunc\"\nError code: %d\n",lastError);
-    }
-    FREEFUNCS;
-    */
 }
 
 void Cacher::EndEditParams( IObjParam* ip, ULONG flags, Animatable* next )
@@ -236,14 +230,13 @@ CreateMouseCallBack* Cacher::GetCreateMouseCallBack()
 //From SimpleObject
 void Cacher::BuildMesh(TimeValue t)
 {
-    LOADFUNC load_func = (LOADFUNC)FUNC(LoadFunc);
+    load_func = (LOADFUNC)FUNC(LoadFunc, load_func);
     if(load_func != NULL){
         load_func(&mesh, t, pblock2, &ivalid, m_cached_data, hInstance);
     } else {
         DWORD lastError = GetLastError();
         DebugPrint(L"Error loading function \"LoadFunc\"\nError code: %d\n",lastError);
     }
-    FREEFUNCS;
     mesh.InvalidateGeomCache();
 }
 
