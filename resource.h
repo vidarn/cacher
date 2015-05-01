@@ -3,6 +3,7 @@
 #endif
 
 #define IDD_PANEL                               101
+#define IDR_LOGO1                               103
 #define IDC_FILENAME                            40000
 #define IDS_LIBDESCRIPTION                      40000
 #define IDC_STATUS                              40001

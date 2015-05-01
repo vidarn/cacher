@@ -13,6 +13,7 @@
 #include "cached_frame.h"
 #include "resource.h"
 #include "Dynamic.h"
+//#include "logo.cpp"
 
 #include "lib/lz4.h"
 
@@ -180,6 +181,7 @@ static void init_time()
 struct ThreadData {
     HANDLE h_file;
     char *data;
+    char *source;
     int bucket_size;
     int compressed_size_total;
     int offset_source;
@@ -188,17 +190,21 @@ struct ThreadData {
 static unsigned __stdcall thread_proc(void *data)
 {
     ThreadData* td = (ThreadData*)data;
-
-    //TODO(Vidar) only map the portion of the file we're interested in
-    //TODO(Vidar) Perhaps we can do the file mapping in the main thread and only map the view here
-    HANDLE h_file_mapping = CreateFileMapping(td->h_file, NULL, PAGE_READONLY, 0, td->compressed_size_total, NULL);
-    void *h_view = MapViewOfFile(h_file_mapping, FILE_MAP_READ, 0, 0, 0);
-    char *source = ((char*)h_view) + td->offset_source;
     char *output = td->data;
-    LZ4_decompress_fast(source, output, td->bucket_size);
+    if(td->h_file){
+        //TODO(Vidar) only map the portion of the file we're interested in
+        //TODO(Vidar) Perhaps we can do the file mapping in the main thread and only map the view here?
+        HANDLE h_file_mapping = CreateFileMapping(td->h_file, NULL, PAGE_READONLY, 0, td->compressed_size_total, NULL);
+        void *h_view = MapViewOfFile(h_file_mapping, FILE_MAP_READ, 0, 0, 0);
+        char *source = ((char*)h_view) + td->offset_source;
+        LZ4_decompress_fast(source, output, td->bucket_size);
 
-    UnmapViewOfFile(h_view);
-    CloseHandle(h_file_mapping);
+        UnmapViewOfFile(h_view);
+        CloseHandle(h_file_mapping);
+    } else {
+        char *source = td->source + td->offset_source;
+        LZ4_decompress_fast(source, output, td->bucket_size);
+    }
 
     _endthreadex( 0 );
     return 0;
@@ -240,7 +246,7 @@ INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wPar
     return ret;
 }
 
-char * LoadFrameData(IParamBlock2 *pblock, int frame, int *num_verts, int *num_faces)
+char * LoadFrameData(char *source_data, IParamBlock2 *pblock, int frame, int *num_verts, int *num_faces)
 {
     TimeValue t = frame*GetTicksPerFrame();
     int version;
@@ -249,11 +255,13 @@ char * LoadFrameData(IParamBlock2 *pblock, int frame, int *num_verts, int *num_f
     int bucket_size[NUM_BUCKETS];
     int bucket_size_total = 0;
     int compressed_size_total = 0;
-    char *data = NULL;
-    HANDLE h_file;
+    char *ret = NULL;
+    bool ok = source_data != NULL;
+    bool from_file = source_data == NULL;
+    HANDLE h_file = 0;
     MSTR str = pblock->GetStr(pb_filename,t);
     wchar_t *in_filename = str.ToBSTR();
-    if(in_filename){
+    if(from_file && in_filename){
         size_t len = wcslen(in_filename);
         if(len > 10){
             in_filename[len-9] = 0;
@@ -280,47 +288,67 @@ char * LoadFrameData(IParamBlock2 *pblock, int frame, int *num_verts, int *num_f
                 ReadFile(h_file, char_buffer, buffer_size, NULL, NULL);
                 int* buffer = (int*)char_buffer;
 
-                version         = *(buffer++);
-                *num_verts       = *(buffer++);
-                *num_faces       = *(buffer++);
-                num_tverts      = *(buffer++);
+                version    = *(buffer++);
+                *num_verts = *(buffer++);
+                *num_faces = *(buffer++);
+                num_tverts = *(buffer++);
+
                 for(int i=0;i<NUM_BUCKETS;i++){
                     compressed_size[i] = *(buffer++);
                     bucket_size[i] = *(buffer++);
                     bucket_size_total += bucket_size[i];
                     compressed_size_total += compressed_size[i];
                 }
-
-                data = (char *)malloc(bucket_size_total);
-
-                ThreadData thread_data[NUM_BUCKETS];
-                HANDLE h_threads[NUM_BUCKETS];
-                int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
-                int offset_data =0 ;
-                for(int i=0;i<NUM_BUCKETS;i++){
-                    thread_data[i].h_file = h_file;
-                    thread_data[i].data = data + offset_data;;
-                    thread_data[i].bucket_size = bucket_size[i];
-                    thread_data[i].compressed_size_total = compressed_size_total;
-                    thread_data[i].offset_source = offset_source;
-
-                    h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
-                    offset_source += compressed_size[i];
-                    offset_data   += bucket_size[i];
-                }
-
-                for(int i=0;i<NUM_BUCKETS;i++){
-                    WaitForSingleObject(h_threads[i], INFINITE );
-                }
-
-
-                CloseHandle(h_file);
+                
+                ok = true;
             }
             free(filename_buffer);
         }
         SysFreeString(in_filename);
     }
-    return data;
+    if(!from_file){
+        int *int_data = (int*)source_data;
+        version    = *(int_data++);
+        *num_verts = *(int_data++);
+        *num_faces = *(int_data++);
+        num_tverts = *(int_data++);
+
+        for(int i=0;i<NUM_BUCKETS;i++){
+            compressed_size[i] = *(int_data++);
+            bucket_size[i] = *(int_data++);
+            bucket_size_total += bucket_size[i];
+            compressed_size_total += compressed_size[i];
+        }
+    }
+    if(ok){
+
+        ret = (char *)malloc(bucket_size_total);
+
+        ThreadData thread_data[NUM_BUCKETS];
+        HANDLE h_threads[NUM_BUCKETS];
+        int offset_source = sizeof(int)*(4 + 2*NUM_BUCKETS);
+        int offset_data =0 ;
+        for(int i=0;i<NUM_BUCKETS;i++){
+            thread_data[i].h_file = h_file;
+            thread_data[i].data = ret + offset_data;;
+            thread_data[i].bucket_size = bucket_size[i];
+            thread_data[i].compressed_size_total = compressed_size_total;
+            thread_data[i].offset_source = offset_source;
+            thread_data[i].source = source_data;
+
+            h_threads[i] = (HANDLE)_beginthreadex(NULL, 0 ,&thread_proc,(void*)(thread_data+i),  0, NULL);
+            offset_source += compressed_size[i];
+            offset_data   += bucket_size[i];
+        }
+
+        for(int i=0;i<NUM_BUCKETS;i++){
+            WaitForSingleObject(h_threads[i], INFINITE );
+        }
+    }
+    if(from_file){
+        CloseHandle(h_file);
+    }
+    return ret;
 }
 
 //TODO(Vidar) Handle changes in frame range
@@ -353,7 +381,7 @@ void Cache(IParamBlock2 *pblock, CachedData *cached_data)
         int num_faces  = 0;
 
         if(frame >= cached_data->start){
-            char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
+            char* data = LoadFrameData(NULL, pblock, frame, &num_verts, &num_faces);
             if(data){
 
                 cf.verts = (Point3*)malloc(sizeof(Point3)*num_verts);
@@ -374,7 +402,7 @@ void Cache(IParamBlock2 *pblock, CachedData *cached_data)
         }
 
         cached_data->frames[frame] = cf;
-        /* TODO(Vidar) We should handle messages to keep 3ds max from being unresponsive
+        /* TODO(Vidar) We should handle messages to keep 3ds max from becoming unresponsive
         MaxSDK::WindowsMessageFilter messageFilter;
         messageFilter.RunNonBlockingMessageLoop();
         if(messageFilter.Aborted()){
@@ -383,7 +411,7 @@ void Cache(IParamBlock2 *pblock, CachedData *cached_data)
     }
 }
 
-void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, CachedData cached_data)
+void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, CachedData cached_data, HINSTANCE hInstance)
 {
     init_time();
     int frame = t/GetTicksPerFrame();
@@ -393,9 +421,6 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
         if(cf.valid){
             mesh->setNumVerts(cf.num_verts);
             mesh->setNumFaces(cf.num_faces);
-            //TODO(Vidar) What if we just change the pointer? Kind of dangerous, but perhaps it could work
-            // however, what happens when 3ds max decides to release the memory..?
-            // On second thought, I don't think we need to worry about it, it seems fast enough allready
             memcpy((void*)mesh->verts,(void*)cf.verts,cf.num_verts*sizeof(Point3));
             memcpy((void*)mesh->faces,(void*)cf.faces,cf.num_faces*sizeof(Face  ));
             loaded_frame = true;
@@ -405,7 +430,7 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
         int num_verts = 0;
         int num_faces = 0;
 
-        char* data = LoadFrameData(pblock, frame, &num_verts, &num_faces);
+        char* data = LoadFrameData(NULL, pblock, frame, &num_verts, &num_faces);
         if(data){
             mesh->setNumVerts(num_verts);
             mesh->setNumFaces(num_faces);
@@ -417,24 +442,31 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
 
             free(data);
         } else {
-            //TODO(Vidar) Draw a prettier default icon
-            float s = 10.0f;
-            mesh->setNumVerts(4);
-            mesh->setNumFaces(3);
-            mesh->setVert(0,s*Point3(0.0,0.0,0.0)); 
-            mesh->setVert(1,s*Point3(10.0,0.0,0.0)); 
-            mesh->setVert(2,s*Point3(0.0,10.0,0.0)); 
-            mesh->setVert(3,s*Point3(0.0,0.0,10.0)); 
+            //TODO(Vidar) Obviously, we should not do this every update. Cache the logo somewhere!
+            HRSRC hResInfo = FindResource(hInstance,MAKEINTRESOURCE(IDR_LOGO1),L"LOGO");
+            bool loaded_logo = false;
+            HGLOBAL logo = LoadResource(hInstance,hResInfo);
+            if( logo != NULL){
+                void * logo_data = LockResource(logo);
+                data = LoadFrameData((char*)logo_data, pblock, frame, &num_verts, &num_faces);
+                if(data){
+                    mesh->setNumVerts(num_verts);
+                    mesh->setNumFaces(num_faces);
 
-            mesh->faces[0].setVerts(0, 1, 2);
-            mesh->faces[0].setEdgeVisFlags(1,1,0);
-            mesh->faces[0].setSmGroup(2);
-            mesh->faces[1].setVerts(3, 1, 0);
-            mesh->faces[1].setEdgeVisFlags(1,1,0);
-            mesh->faces[1].setSmGroup(2);
-            mesh->faces[2].setVerts(0, 2, 3);
-            mesh->faces[2].setEdgeVisFlags(1,1,0);
-            mesh->faces[2].setSmGroup(4);
+                    char *curr_data = data;
+                    memcpy((void*)mesh->verts,(void*)curr_data,num_verts*sizeof(Point3));
+                    curr_data += num_verts*sizeof(Point3);
+                    memcpy((void*)mesh->faces,(void*)curr_data,num_faces*sizeof(Face  ));
+                    loaded_logo = true;
+
+                    free(data);
+                }
+            }
+            if(!loaded_logo){
+                mesh->setNumVerts(0);
+                mesh->setNumFaces(0);
+                DebugPrint(L"Something went wrong when loading the logo mesh!\n");
+            }
         }
     }
     ivalid->Set(t,t+GetTicksPerFrame()-1);

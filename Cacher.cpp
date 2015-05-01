@@ -238,7 +238,7 @@ void Cacher::BuildMesh(TimeValue t)
 {
     LOADFUNC load_func = (LOADFUNC)FUNC(LoadFunc);
     if(load_func != NULL){
-        load_func(&mesh, t, pblock2, &ivalid, m_cached_data);
+        load_func(&mesh, t, pblock2, &ivalid, m_cached_data, hInstance);
     } else {
         DWORD lastError = GetLastError();
         DebugPrint(L"Error loading function \"LoadFunc\"\nError code: %d\n",lastError);

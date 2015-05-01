@@ -10,6 +10,11 @@
 
 
 
+LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
+IDR_LOGO1          LOGO           ".\\logo.mesh"
+
+
+
 //
 // Dialog resources
 //
