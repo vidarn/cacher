@@ -168,7 +168,8 @@ CachedFrame LoadCachedFrameFromFile( IParamBlock2 *pblock, int frame)
                 const int buffer_size = sizeof(FileHeader);
                 int char_buffer[buffer_size];
 
-                if(ReadFile(h_file, char_buffer, buffer_size, NULL, NULL) == 0){
+                DWORD num_bytes_read = 0;
+                if(ReadFile(h_file, char_buffer, buffer_size, &num_bytes_read, NULL) == 0){
                     DWORD error = GetLastError();
                     DebugPrint(L"Error: %d\n", error);
                 }

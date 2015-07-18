@@ -4,7 +4,7 @@ source_dir=.\\
 lib_dir=lib\ 
 output_dir=build\ 
 
-release 		 =2015
+release 		 =2014
 optimization     = -Ox
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 
 include_path = -I"C:\Program Files\Autodesk\3ds Max $(release) SDK\maxsdk\include" -I$(source_dir)
