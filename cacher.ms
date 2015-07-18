@@ -37,7 +37,18 @@
 					filepath = pathConfig.appendPath filepath filename
 					makedir filepath 
 				)
-				CacherCommands.CacheMesh obj (pathConfig.appendPath filepath filename) startFrame.value endFrame.value
+				progressStart ("Caching " + filename)
+				inv_frame_range = (100.0/(endFrame.value - startFrame.value))
+				skip = false
+				for i = startFrame.value to endFrame.value do (
+					if not skip then (
+						CacherCommands.CacheMesh obj (pathConfig.appendPath filepath filename) i i
+						if (progressUpdate (i*inv_frame_range)) == false then (
+							skip = true
+						)
+					)
+				)
+				progressEnd()
 			)
 			else (
 				messageBox "Select one object"

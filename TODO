@@ -1,6 +1,7 @@
 --- TODO ---
 * Support more data
-    * Material ID
+    * UVW coordinates
+    - Material ID
 * Clean things up
     - The file format should look like this:
         - version, num_verts, num_faces
