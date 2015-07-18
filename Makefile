@@ -4,7 +4,7 @@ source_dir=.\\
 lib_dir=lib\ 
 output_dir=build\ 
 
-release 		 =2014
+release 		 =2016
 optimization     = -Ox
 warnings         = -WX -W4 -wd4201 -wd4100 -wd4189 -wd4127 
 include_path = -I"C:\Program Files\Autodesk\3ds Max $(release) SDK\maxsdk\include" -I$(source_dir)
@@ -20,6 +20,8 @@ options = -D MAX_REL_$(release) #-D DYNAMIC
 update:dynamic
 
 all:cacher dynamic
+
+release:cacher
 
 cacher_dll = Cacher
 cacher_cpp = $(source_dir)Cacher.cpp $(source_dir)common.cpp $(source_dir)DllEntry.cpp $(source_dir)Dynamic.cpp $(lib_dir)lz4.c
@@ -39,3 +41,6 @@ cacher:
 
 dynamic:
 	@cl $(compiler_flags) $(optimization) $(warnings) $(options) $(include_path) $(dynamic_defines) $(dynamic_cpp) /link $(linker_flags) $(lib_path) $(libs) -DEF:$(dynamic_def) -out:$(dynamic_out)
+
+release:
+	@copy /y /b $(plugin_dir)cacher.dlo bin\cacher_$(release).dlo
