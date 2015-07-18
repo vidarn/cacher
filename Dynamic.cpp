@@ -61,7 +61,7 @@ bool SaveFunc(INode *node, MSTR filename, int start, int end)
                 wchar_t *filename_buffer = (wchar_t*)malloc(buffer_size*sizeof(wchar_t));
                 swprintf(filename_buffer,buffer_size,filename_template,in_filename,frame);
 
-
+                // Read mesh data
                 Mesh& mesh = tri->GetMesh();
                 int num_verts  = mesh.getNumVerts();
                 int num_faces  = mesh.getNumFaces();
@@ -69,14 +69,15 @@ bool SaveFunc(INode *node, MSTR filename, int start, int end)
                 int source_size_verts = num_verts*sizeof(Point3);
                 int source_size_faces = num_faces*sizeof(Face);
 
+                // Compression buffer
                 char *compressed[2];
                 int   compressed_size[2];
-    
                 compressed[0]      = (char *)malloc(LZ4_compressBound(source_size_verts));
                 compressed_size[0] = LZ4_compress((char*)(mesh.verts),compressed[0],source_size_verts);
                 compressed[1]      = (char *)malloc(LZ4_compressBound(source_size_faces));
                 compressed_size[1] = LZ4_compress((char*)(mesh.faces),compressed[1],source_size_faces);
 
+                // File header
                 FileHeader file_header;
                 file_header.version = file_format_version;
                 file_header.num_verts = num_verts;
@@ -86,24 +87,21 @@ bool SaveFunc(INode *node, MSTR filename, int start, int end)
 
                 DWORD file_size = compressed_size[0] + compressed_size[1] + sizeof(FileHeader);
 
+                // Write file
                 HANDLE h_file = CreateFile(filename_buffer ,GENERIC_WRITE|GENERIC_READ, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
                 if(h_file != INVALID_HANDLE_VALUE){
 
                     HANDLE h_file_mapping = CreateFileMapping(h_file, NULL, PAGE_READWRITE, 0, file_size, NULL);
-
                     void *h_view = MapViewOfFile(h_file_mapping, FILE_MAP_WRITE, 0, 0, 0);
                     char *file_char = (char *)h_view;
 
                     memcpy(file_char,&file_header,sizeof(FileHeader));
                     file_char += sizeof(FileHeader);
-
                     for(int i=0;i<2;i++){
                         memcpy(file_char, compressed[i], compressed_size[i]);
                         file_char +=  compressed_size[i];
                         free(compressed[i]);
                     }
-
-                    DWORD error = GetLastError();
 
                     UnmapViewOfFile(h_view);
                     CloseHandle(h_file_mapping);
@@ -124,14 +122,14 @@ bool SaveFunc(INode *node, MSTR filename, int start, int end)
 }
 
 static long long time;
-static void print_time(wchar_t *str)
+inline static void print_time(wchar_t *str)
 {
 #if DYNAMIC
     //DebugPrint(L"%s time: %d\n", str, milliseconds_now() - time);
     time = milliseconds_now();
 #endif
 }
-static void init_time()
+inline static void init_time()
 {
 #if DYNAMIC
     //DebugPrint(L"----------\n");
@@ -184,7 +182,6 @@ CachedFrame LoadCachedFrameFromFile( IParamBlock2 *pblock, int frame)
                 char *source_verts = (char*)h_view + sizeof(FileHeader);
                 char *source_faces = source_verts + header->compressed_size_verts;
 
-                //TODO(Vidar) make sure this is actually faster than using ReadFile. Seems weird...
                 cf.valid = true;
                 cf.num_verts = header->num_verts;
                 cf.num_faces = header->num_faces;
@@ -223,7 +220,7 @@ CachedFrame LoadCachedFrameFromMemory(char *data)
     return cf;
 }
 
-void LoadCachedFrame(CachedFrame cf, Mesh *mesh)
+void LoadCachedMesh(CachedFrame cf, Mesh *mesh)
 {
     mesh->setNumVerts(cf.num_verts);
     mesh->setNumFaces(cf.num_faces);
@@ -251,22 +248,27 @@ void FreeCache(CachedData* cached_data)
     cached_data->end   = 0;
 }
 
-void Cache(IParamBlock2 *pblock, CachedData *cached_data)
+void Cache(IParamBlock2 *pblock, CachedData *cached_data, HWND hWnd)
 {
-    void *h_view = 0;
     Interval interval;
     pblock->GetValue(pb_start, 0, cached_data->start, interval);
     pblock->GetValue(pb_end,   0, cached_data->end,   interval);
+    float inv_frame_range = 0;
     if(cached_data->start < cached_data->end){
         cached_data->frames = (CachedFrame *)malloc((cached_data->end+1)*sizeof(CachedFrame));
+        inv_frame_range = 100.f/(float)(cached_data->end-cached_data->start);
     }
     for(int frame = 0; frame <= cached_data->end; frame++){
-        CachedFrame cf = {};
+        int progress_bar_amount = (int)((float)frame*inv_frame_range);
+        SendMessage(GetDlgItem(hWnd,IDC_PROGRESS),PBM_SETPOS,progress_bar_amount+1,0);
+        SendMessage(GetDlgItem(hWnd,IDC_PROGRESS),PBM_SETPOS,progress_bar_amount,0);
+        RedrawWindow(hWnd,NULL,NULL,RDW_ERASE);
 
+
+        CachedFrame cf = {};
         if(frame >= cached_data->start){
             cf = LoadCachedFrameFromFile(pblock,frame);
         }
-
         cached_data->frames[frame] = cf;
     }
 }
@@ -279,7 +281,7 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
     if(frame >= cached_data.start && frame <= cached_data.end){
         CachedFrame cf = cached_data.frames[frame];
         if(cf.valid){
-            LoadCachedFrame(cf,mesh);
+            LoadCachedMesh(cf,mesh);
         }
     }
     if(!loaded_frame){
@@ -288,7 +290,7 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
 
         CachedFrame cf = LoadCachedFrameFromFile(pblock,frame);
         if(cf.valid){
-            LoadCachedFrame(cf,mesh);
+            LoadCachedMesh(cf,mesh);
             FreeCachedFrame(&cf);
         } else {
             //TODO(Vidar) Obviously, we should not do this every update. Cache the logo somewhere!
@@ -298,7 +300,7 @@ void LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, C
             if( logo != NULL){
                 void * logo_data = LockResource(logo);
                 CachedFrame cf = LoadCachedFrameFromMemory((char*)logo_data);
-                LoadCachedFrame(cf,mesh);
+                LoadCachedMesh(cf,mesh);
                 FreeCachedFrame(&cf);
                 loaded_logo = true;
             }
@@ -322,13 +324,19 @@ INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wPar
         switch(control){
             case IDC_CACHERAM:
                 if(command == BN_BUTTONUP){
-                    HWND btn_hwnd = GetDlgItem(hWnd,IDC_CACHERAM);
-                    ICustButton *button = GetICustButton(btn_hwnd);
+                    HWND btn_hWnd = GetDlgItem(hWnd,IDC_CACHERAM);
+                    ICustButton *button = GetICustButton(btn_hWnd);
                     FreeCache(cached_data);
-                    if(button->IsChecked()){
+                    BOOL checked = (BOOL)button->IsChecked();
+                    ReleaseICustButton(button);
+                    if(checked){
                         IParamBlock2 *pblock = map->GetParamBlock();
-                        Cache(pblock, cached_data);
+                        Cache(pblock, cached_data, hWnd);
                     }
+                    SendMessage(GetDlgItem(hWnd,IDC_PROGRESS),PBM_SETPOS,0,0);
+                    RedrawWindow(hWnd,NULL,NULL,RDW_ERASE);
+                    button = GetICustButton(btn_hWnd);
+                    button->SetCheck(checked);
                     ReleaseICustButton(button);
                 }
                 ret = TRUE;

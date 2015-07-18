@@ -1,4 +1,6 @@
 --- TODO ---
+* Support more data
+    * Material ID
 * Clean things up
     - The file format should look like this:
         - version, num_verts, num_faces
@@ -6,12 +8,8 @@
         - face data (compressed)
     - The cached frame should mirror this structure
     - First version: load all the data from the file into memory and then create the cached frame
-    // What good woud this do? * Second version: try using a memory map to avoid reading everything twice
+    * Second version: try using a memory map to avoid reading everything twice // What good would this do? 
     * When loading a frame, take a cached frame and a mesh and set the right things
-* Progress update
-* Check out what happend when saving/loading/deleting
-* Fix spinners
-* Resize logo
-* Support more data
-* Try using Blosc for compression
-
+- Check out what happens with the memory when saving/loading/deleting
+- Fix spinners
+- Progress update

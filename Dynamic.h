@@ -7,6 +7,6 @@ typedef void    (*LOADFUNC)(Mesh*, TimeValue, IParamBlock2 *, Interval*, struct 
 bool    SaveFunc(INode *node, MSTR filename, int start, int end);
 INT_PTR DlgFunc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam, struct CachedData* cached_data);
 void    FreeCache(CachedData* cached_data);
-void    Cache(IParamBlock2 *pblock, CachedData *cached_data);
+void    Cache(IParamBlock2 *pblock, CachedData *cached_data,HWND hWnd);
 void    LoadFunc(Mesh *mesh, TimeValue t, IParamBlock2 *pblock, Interval *ivalid, struct CachedData cached_data, HINSTANCE hInstance);
 

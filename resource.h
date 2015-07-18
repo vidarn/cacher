@@ -26,4 +26,6 @@
 #define IDS_START                               40009
 #define IDC_UNLOAD                              40010
 #define IDS_END                                 40010
+#define IDC_PROGRESS                            40011
 #define IDS_UNLOAD                              40011
+#define IDC_GROUP                               40012

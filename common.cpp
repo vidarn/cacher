@@ -3,6 +3,11 @@
 // Windows Header Files:
 #include <windows.h>
 
+#ifdef MAX_REL_2016
+const wchar_t* PLUGINS_FOLDER = L"C:\\Program Files\\Autodesk\\3ds Max 2016\\plugins";
+const wchar_t* DYNAMIC_DLL_PATH = L"C:\\Program Files\\Autodesk\\3ds Max 2016\\plugins\\cacher_dynamic.dll";
+#endif
+
 #ifdef MAX_REL_2015
 const wchar_t* PLUGINS_FOLDER = L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins";
 const wchar_t* DYNAMIC_DLL_PATH = L"C:\\Program Files\\Autodesk\\3ds Max 2015\\plugins\\cacher_dynamic.dll";

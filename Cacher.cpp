@@ -8,8 +8,9 @@
 
 #define PBLOCK_REF  0
 
-DLGPROCFUNC dlg_func = NULL;
-LOADFUNC   load_func = NULL;
+DLGPROCFUNC    dlg_func = NULL;
+LOADFUNC      load_func = NULL;
+FREECACHEFUNC free_func = NULL;
 
 class Cacher : public SimpleObject2
 {
@@ -60,6 +61,15 @@ class CacherDlgProc : public ParamMap2UserDlgProc {
         INT_PTR DlgProc(TimeValue t, IParamMap2 *  map, HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam )
         {
             INT_PTR ret = FALSE;
+            dlg_func = (DLGPROCFUNC)FUNC(DlgFunc,dlg_func);
+            if(dlg_func != NULL){
+                DebugPrint(L"dlg_func: %d\n", (int)dlg_func);
+                //TODO(Vidar) Why does it crash here? Is it after reloading the dll? No! Perhaps it's invalid when we start?
+                ret = dlg_func(t,map,hWnd,msg,wParam,lParam,&(m_cacher->m_cached_data));
+            } else {
+                DWORD lastError = GetLastError();
+                DebugPrint(L"Error loading function \"DlgFunc\"\nError code: %d\n",lastError);
+            }
             if(msg == WM_COMMAND){
                 int control = LOWORD(wParam);
                 int command = HIWORD(wParam);
@@ -67,16 +77,6 @@ class CacherDlgProc : public ParamMap2UserDlgProc {
                     FREEFUNCS;
                     dlg_func = NULL;
                     load_func = NULL;
-                }
-            } else {
-                dlg_func = (DLGPROCFUNC)FUNC(DlgFunc,dlg_func);
-                if(dlg_func != NULL){
-                    DebugPrint(L"dlg_func: %d\n", (int)dlg_func);
-                    //TODO(Vidar) Why does it crash here? Is it after reloading the dll? No! Perhaps it's invalid when we start?
-                    ret = dlg_func(t,map,hWnd,msg,wParam,lParam,&(m_cacher->m_cached_data));
-                } else {
-                    DWORD lastError = GetLastError();
-                    DebugPrint(L"Error loading function \"DlgFunc\"\nError code: %d\n",lastError);
                 }
             }
             return ret;
@@ -109,14 +109,7 @@ ClassDesc2* GetCacherDesc() {
     return &CacherDesc; 
 }
 
-
-
-
-
 enum { cacher_params };
-
-
-
 
 static ParamBlockDesc2 cacher_param_blk ( cacher_params, _T("params"),  0, GetCacherDesc(), 
     P_AUTO_CONSTRUCT + P_AUTO_UI, PBLOCK_REF, 
@@ -161,6 +154,15 @@ Cacher::Cacher()
 
 Cacher::~Cacher()
 {
+    DebugPrint(L"Destructor!\n");
+    free_func = (FREECACHEFUNC)FUNC(FreeCache, free_func);
+    if(free_func != NULL){
+        free_func(&m_cached_data);
+    } else {
+        DWORD lastError = GetLastError();
+        DebugPrint(L"Error loading function \"Freefunc\"\nError code: %d\n",lastError);
+    }
+    
 }
 
 void Cacher::BeginEditParams(IObjParam* ip, ULONG flags, Animatable* prev)

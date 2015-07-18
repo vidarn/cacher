@@ -6,6 +6,7 @@
 #define APSTUDIO_READONLY_SYMBOLS
 #include "afxres.h"
 #undef APSTUDIO_READONLY_SYMBOLS
+#include "commctrl.h"
 
 
 
@@ -23,13 +24,15 @@ IDD_PANEL DIALOG 0, 0, 108, 176
 STYLE DS_SETFONT | WS_VISIBLE | WS_CHILDWINDOW
 FONT 8, "MS Sans Serif"
 {
-    CONTROL         "Unload dll", IDC_UNLOAD, "CustButton", 0x50020000, 18, 137, 77, 24, 0x00000000
+    CONTROL         "Unload dll", IDC_UNLOAD, "CustButton", 0x50020000, 18, 144, 77, 17, 0x00000000
     CONTROL         "", IDC_STARTEDIT, "CustEdit", 0x50020000, 17, 97, 25, 11, 0x00000000
     CONTROL         "No file loaded", IDC_STATUS, "CustEdit", 0x50020000, 11, 17, 86, 15, 0x00000000
     LTEXT           "Cache location:", 0, 14, 8, 50, 9, SS_LEFT, WS_EX_LEFT
     CONTROL         "Browse...", IDC_FILENAME, "CustButton", 0x50020000, 27, 38, 53, 18, 0x00000000
-    CONTROL         "Cache to RAM", IDC_CACHERAM, "CustButton", 0x50020000, 17, 60, 74, 18, 0x00000000
-    LTEXT           "www.vidarnel.com", IDC_CREDIT, 22, 122, 59, 9, SS_LEFT, WS_EX_LEFT
+    CONTROL         "Cache to RAM", IDC_CACHERAM, "CustButton", 0x50020000, 18, 68, 74, 18, 0x00000000
+    GROUPBOX        "", IDC_GROUP, 11, 58, 87, 72, 0, WS_EX_LEFT
+    CONTROL         "", IDC_PROGRESS, PROGRESS_CLASS, 0, 15, 113, 78, 9, WS_EX_LEFT
+    LTEXT           "www.vidarnel.com", IDC_CREDIT, 23, 130, 59, 9, SS_LEFT, WS_EX_LEFT
     CONTROL         "", IDC_STARTSPIN, "SpinnerControl", 0x50020000, 42, 97, 10, 11, 0x00000000
     CONTROL         "", IDC_ENDSPIN, "SpinnerControl", 0x50020000, 82, 97, 10, 11, 0x00000000
     LTEXT           "Start:", IDC_START_LABEL, 17, 87, 18, 9, SS_LEFT, WS_EX_LEFT
