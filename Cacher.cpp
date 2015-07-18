@@ -71,6 +71,8 @@ class CacherDlgProc : public ParamMap2UserDlgProc {
             } else {
                 dlg_func = (DLGPROCFUNC)FUNC(DlgFunc,dlg_func);
                 if(dlg_func != NULL){
+                    DebugPrint(L"dlg_func: %d\n", (int)dlg_func);
+                    //TODO(Vidar) Why does it crash here? Is it after reloading the dll? No! Perhaps it's invalid when we start?
                     ret = dlg_func(t,map,hWnd,msg,wParam,lParam,&(m_cacher->m_cached_data));
                 } else {
                     DWORD lastError = GetLastError();

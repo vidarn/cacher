@@ -53,5 +53,6 @@ void freeDynamic()
         FreeLibrary(oldHandle);
     }
     SetDllDirectory(oldDir);
+    delete[] oldDir;
 }
 

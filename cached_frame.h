@@ -3,8 +3,8 @@ struct CachedFrame{
     bool valid;
     int num_verts;
     int num_faces;
-    Point3* verts;
-    Face* faces;
+    char* verts; //Compressed
+    char* faces; //Compressed
 };
 
 struct CachedData{

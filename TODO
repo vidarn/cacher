@@ -1,6 +1,17 @@
 --- TODO ---
-
-* Progress update
-* Fix spinners
-* Change loading to use threads in a smarter way
 * Clean things up
+    - The file format should look like this:
+        - version, num_verts, num_faces
+        - vert data (compressed)
+        - face data (compressed)
+    - The cached frame should mirror this structure
+    - First version: load all the data from the file into memory and then create the cached frame
+    // What good woud this do? * Second version: try using a memory map to avoid reading everything twice
+    * When loading a frame, take a cached frame and a mesh and set the right things
+* Progress update
+* Check out what happend when saving/loading/deleting
+* Fix spinners
+* Resize logo
+* Support more data
+* Try using Blosc for compression
+
