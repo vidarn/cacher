@@ -2,6 +2,7 @@
 * Support more data
     * UVW coordinates
     - Material ID
+* File sequencer
 * Clean things up
     - The file format should look like this:
         - version, num_verts, num_faces

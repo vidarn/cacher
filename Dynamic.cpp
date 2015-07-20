@@ -188,14 +188,8 @@ CachedFrame LoadCachedFrameFromFile( IParamBlock2 *pblock, int frame)
                 cf.num_faces = header->num_faces;
                 cf.verts = (char *)malloc(header->compressed_size_verts);
                 cf.faces = (char *)malloc(header->compressed_size_faces);
-                for(int i=0;i<header->compressed_size_verts;i++){
-                    cf.verts[i] = source_verts[i];
-                }
-                for(int i=0;i<header->compressed_size_faces;i++){
-                    cf.faces[i] = source_faces[i];
-                }
-                //memcpy(cf.verts, source_verts, header->compressed_size_verts);
-                //memcpy(cf.faces, source_faces, header->compressed_size_faces);
+                memcpy(cf.verts, source_verts, header->compressed_size_verts);
+                memcpy(cf.faces, source_faces, header->compressed_size_faces);
 
                 UnmapViewOfFile(h_view);
                 CloseHandle(h_file_mapping);
