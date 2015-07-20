@@ -177,7 +177,7 @@ CachedFrame LoadCachedFrameFromFile( IParamBlock2 *pblock, int frame)
 
                 int compressed_size_total = header->compressed_size_verts + header->compressed_size_faces;
 
-                HANDLE h_file_mapping = CreateFileMapping(h_file, NULL, PAGE_READONLY, 0, compressed_size_total, NULL);
+                HANDLE h_file_mapping = CreateFileMapping(h_file, NULL, PAGE_READONLY, 0, compressed_size_total+sizeof(FileHeader), NULL);
                 void *h_view = MapViewOfFile(h_file_mapping, FILE_MAP_READ, 0, 0, 0);
 
                 char *source_verts = (char*)h_view + sizeof(FileHeader);
@@ -188,8 +188,14 @@ CachedFrame LoadCachedFrameFromFile( IParamBlock2 *pblock, int frame)
                 cf.num_faces = header->num_faces;
                 cf.verts = (char *)malloc(header->compressed_size_verts);
                 cf.faces = (char *)malloc(header->compressed_size_faces);
-                memcpy(cf.verts, source_verts, header->compressed_size_verts);
-                memcpy(cf.faces, source_faces, header->compressed_size_faces);
+                for(int i=0;i<header->compressed_size_verts;i++){
+                    cf.verts[i] = source_verts[i];
+                }
+                for(int i=0;i<header->compressed_size_faces;i++){
+                    cf.faces[i] = source_faces[i];
+                }
+                //memcpy(cf.verts, source_verts, header->compressed_size_verts);
+                //memcpy(cf.faces, source_faces, header->compressed_size_faces);
 
                 UnmapViewOfFile(h_view);
                 CloseHandle(h_file_mapping);
